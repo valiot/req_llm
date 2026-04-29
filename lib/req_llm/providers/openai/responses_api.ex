@@ -505,7 +505,7 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
     opts_map = if is_map(opts), do: opts, else: Map.new(opts)
     provider_opts = opts_map[:provider_options] || []
 
-    store = Keyword.get(provider_opts, :store, true)
+    store = Keyword.get(provider_opts, :store, default_store(model_name))
 
     previous_response_id =
       if store != false do
@@ -616,6 +616,10 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
     else
       body
     end
+  end
+
+  defp default_store(model_name) do
+    !ReqLLM.Providers.OpenAI.AdapterHelpers.codex_model?(model_name)
   end
 
   defp encode_tool_message_inline(%ReqLLM.Message{role: :tool} = msg) do

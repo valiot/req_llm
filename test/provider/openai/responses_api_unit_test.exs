@@ -1594,6 +1594,28 @@ defmodule Provider.OpenAI.ResponsesAPIUnitTest do
       assert body["store"] == true
     end
 
+    test "codex models default store to false and suppress previous_response_id" do
+      assistant_msg = %ReqLLM.Message{
+        role: :assistant,
+        content: [%ReqLLM.Message.ContentPart{type: :text, text: "Previous answer"}],
+        metadata: %{response_id: "resp_prev_codex"}
+      }
+
+      user_msg = %ReqLLM.Message{
+        role: :user,
+        content: [%ReqLLM.Message.ContentPart{type: :text, text: "Follow up"}]
+      }
+
+      context = %ReqLLM.Context{messages: [assistant_msg, user_msg]}
+      request = build_request(id: "gpt-5.3-codex", context: context)
+
+      encoded = ResponsesAPI.encode_body(request)
+      body = Jason.decode!(encoded.body)
+
+      refute Map.has_key?(body, "previous_response_id")
+      assert body["store"] == false
+    end
+
     test "store: false without prior response_id omits both fields" do
       user_msg = %ReqLLM.Message{
         role: :user,

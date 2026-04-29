@@ -71,6 +71,11 @@ defmodule ReqLLM.Providers.OpenAICodex do
       type: :string,
       doc: "Previous response ID for tool resume flow"
     ],
+    store: [
+      type: {:in, [false]},
+      default: false,
+      doc: "Codex requests are always sent with store disabled"
+    ],
     tool_outputs: [
       type: {:list, :any},
       doc: "Tool execution results for Responses API tool resume flow"
@@ -277,7 +282,7 @@ defmodule ReqLLM.Providers.OpenAICodex do
   end
 
   defp build_codex_body(context, model_name, opts, request) do
-    opts = if is_list(opts), do: Keyword.put_new(opts, :provider_options, []), else: opts
+    opts = opts |> ensure_provider_options() |> force_store_false()
     body = ResponsesAPI.build_request_body(context, model_name, opts, request)
     provider_opts = provider_options(opts)
     instructions = extract_instructions(context) || ""
@@ -299,6 +304,29 @@ defmodule ReqLLM.Providers.OpenAICodex do
     |> Map.put("instructions", instructions)
     |> maybe_put_parallel_tool_calls(provider_opts[:openai_parallel_tool_calls])
   end
+
+  defp ensure_provider_options(opts) when is_list(opts),
+    do: Keyword.put_new(opts, :provider_options, [])
+
+  defp ensure_provider_options(opts), do: opts
+
+  defp force_store_false(opts) when is_list(opts) do
+    provider_opts = opts |> Keyword.get(:provider_options, []) |> provider_options_store_false()
+    Keyword.put(opts, :provider_options, provider_opts)
+  end
+
+  defp force_store_false(opts) when is_map(opts) do
+    provider_opts = opts |> Map.get(:provider_options, []) |> provider_options_store_false()
+    Map.put(opts, :provider_options, provider_opts)
+  end
+
+  defp provider_options_store_false(provider_opts) when is_list(provider_opts),
+    do: Keyword.put(provider_opts, :store, false)
+
+  defp provider_options_store_false(provider_opts) when is_map(provider_opts),
+    do: provider_opts |> Map.to_list() |> Keyword.put(:store, false)
+
+  defp provider_options_store_false(_provider_opts), do: [store: false]
 
   defp tool_resume_body?(%{"input" => input}) when is_list(input) do
     Enum.any?(input, fn

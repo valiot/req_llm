@@ -183,6 +183,34 @@ defmodule ReqLLM.Providers.OpenAICodexTest do
              )
     end
 
+    test "omits previous_response_id from context metadata while keeping store=false" do
+      {:ok, model} = ReqLLM.model("openai_codex:gpt-5.3-codex-spark")
+
+      context =
+        ReqLLM.context([
+          ReqLLM.Context.assistant("Previous answer", metadata: %{response_id: "resp_prev_789"}),
+          ReqLLM.Context.user("Follow up")
+        ])
+
+      {:ok, request} =
+        OpenAICodex.attach_stream(
+          model,
+          context,
+          [
+            provider_options: [
+              auth_mode: :oauth,
+              access_token: jwt_with_account_id("acct_context_resume")
+            ]
+          ],
+          nil
+        )
+
+      body = Jason.decode!(request.body)
+
+      refute Map.has_key?(body, "previous_response_id")
+      assert body["store"] == false
+    end
+
     test "omits previous_response_id for explicit tool_outputs resume while keeping store=false" do
       {:ok, model} = ReqLLM.model("openai_codex:gpt-5.3-codex-spark")
       context = ReqLLM.context([ReqLLM.Context.user("Use the provided tool output")])
