@@ -409,7 +409,7 @@ defmodule ReqLLM.Providers.OpenAICodex do
     body
     |> Map.put("input", Enum.reject(List.wrap(body["input"]), &system_input?/1))
     |> Map.delete("max_output_tokens")
-    |> maybe_put_max_completion_tokens(opts)
+    |> Map.delete("max_completion_tokens")
     |> Map.put("store", false)
     |> Map.put("stream", true)
     |> Map.put("include", ["reasoning.encrypted_content"])
@@ -503,13 +503,6 @@ defmodule ReqLLM.Providers.OpenAICodex do
 
   defp maybe_put_event(event, nil), do: event
   defp maybe_put_event(event, type), do: Map.put(event, :event, type)
-
-  defp maybe_put_max_completion_tokens(map, opts) do
-    case Keyword.get(opts, :max_completion_tokens) || Keyword.get(opts, :max_tokens) do
-      nil -> map
-      tokens -> Map.put(map, "max_completion_tokens", tokens)
-    end
-  end
 
   defp normalize_response_payload(data) do
     update_in(data, ["response"], fn
