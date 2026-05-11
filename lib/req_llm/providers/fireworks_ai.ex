@@ -302,17 +302,18 @@ defmodule ReqLLM.Providers.FireworksAI do
   OpenAI-compatible format.
 
   Normalises tool_choice to OpenAI's `function` shape, strips message-level
-  `metadata` (which Fireworks rejects), renders `reasoning_effort` atoms to
-  the strings Fireworks expects, and forwards the full Fireworks-specific
-  parameter surface (sampling, prompt cache keys, speculation, response_format,
-  etc.). `stream_options.include_usage` is added by `default_build_body/1` for
-  streaming requests.
+  fields Fireworks rejects on assistant turns (`metadata`,
+  `reasoning_details`, `reasoning_content`), renders `reasoning_effort`
+  atoms to the strings Fireworks expects, and forwards the full
+  Fireworks-specific parameter surface (sampling, prompt cache keys,
+  speculation, response_format, etc.). `stream_options.include_usage` is
+  added by `default_build_body/1` for streaming requests.
   """
   @impl ReqLLM.Provider
   def build_body(request) do
     ReqLLM.Provider.Defaults.default_build_body(request)
     |> ReqLLM.Providers.OpenAI.AdapterHelpers.translate_tool_choice_format()
-    |> strip_message_metadata()
+    |> strip_rejected_message_fields()
     |> maybe_put(:reasoning_effort, render_reasoning_effort(request.options[:reasoning_effort]))
     |> maybe_put(:prompt_cache_key, request.options[:prompt_cache_key])
     |> maybe_put(:prompt_cache_isolation_key, request.options[:prompt_cache_isolation_key])
@@ -333,19 +334,39 @@ defmodule ReqLLM.Providers.FireworksAI do
     |> maybe_put(:response_format, request.options[:response_format])
   end
 
-  defp strip_message_metadata(%{messages: messages} = body) when is_list(messages) do
-    %{body | messages: Enum.map(messages, &drop_metadata/1)}
+  # Fireworks's strict OpenAI-compat envelope rejects anything outside the
+  # documented message shape. Three fields commonly survive round-tripping
+  # from prior responses and cause HTTP 400s on the next turn:
+  #
+  #   * `metadata` — present on tool messages that round-trip non-string
+  #     tool results through ReqLLM
+  #   * `reasoning_details` — the OpenRouter-shaped reasoning trace that
+  #     ResponseBuilder.Defaults attaches to every assistant message
+  #   * `reasoning_content` — the OpenAI-compat reasoning string that
+  #     thinking-content parts encode for OpenAI-style providers
+  #
+  # Strip all three from outbound messages so multi-turn conversations
+  # don't blow up the second the model emits a reasoning preamble.
+  @rejected_message_keys [
+    :metadata,
+    "metadata",
+    :reasoning_details,
+    "reasoning_details",
+    :reasoning_content,
+    "reasoning_content"
+  ]
+
+  defp strip_rejected_message_fields(%{messages: messages} = body) when is_list(messages) do
+    %{body | messages: Enum.map(messages, &drop_rejected_fields/1)}
   end
 
-  defp strip_message_metadata(%{"messages" => messages} = body) when is_list(messages) do
-    Map.put(body, "messages", Enum.map(messages, &drop_metadata/1))
+  defp strip_rejected_message_fields(%{"messages" => messages} = body) when is_list(messages) do
+    Map.put(body, "messages", Enum.map(messages, &drop_rejected_fields/1))
   end
 
-  defp strip_message_metadata(body), do: body
+  defp strip_rejected_message_fields(body), do: body
 
-  defp drop_metadata(message) when is_map(message) do
-    message
-    |> Map.delete(:metadata)
-    |> Map.delete("metadata")
+  defp drop_rejected_fields(message) when is_map(message) do
+    Map.drop(message, @rejected_message_keys)
   end
 end

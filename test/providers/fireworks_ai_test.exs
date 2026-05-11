@@ -118,6 +118,55 @@ defmodule ReqLLM.Providers.FireworksAITest do
       refute Map.has_key?(body, "metadata")
     end
 
+    test "encode_body strips reasoning_details, reasoning_content, and metadata from messages" do
+      # Mirrors what ResponseBuilder.Defaults attaches to assistant messages
+      # on the previous turn — Fireworks rejects the second multi-turn call
+      # with HTTP 400 "Extra inputs are not permitted" if these survive.
+      {:ok, model} =
+        ReqLLM.model("fireworks_ai:accounts/fireworks/models/kimi-k2-instruct")
+
+      assistant_with_extras = %ReqLLM.Message{
+        role: :assistant,
+        content: [
+          %ReqLLM.Message.ContentPart{type: :thinking, text: "Let me think step by step."},
+          %ReqLLM.Message.ContentPart{type: :text, text: "ok"}
+        ],
+        metadata: %{trace_id: "abc"},
+        reasoning_details: [
+          %ReqLLM.Message.ReasoningDetails{
+            index: 0,
+            format: "openai-reasoning-content-v1",
+            text: "Let",
+            provider: :fireworks_ai
+          }
+        ]
+      }
+
+      context = %ReqLLM.Context{
+        messages: [
+          assistant_with_extras,
+          %ReqLLM.Message{
+            role: :user,
+            content: [%ReqLLM.Message.ContentPart{type: :text, text: "Continue?"}]
+          }
+        ]
+      }
+
+      {:ok, request} = FireworksAI.prepare_request(:chat, model, context, temperature: 0.0)
+      body = Jason.decode!(FireworksAI.encode_body(request).body)
+
+      for msg <- body["messages"] do
+        refute Map.has_key?(msg, "metadata"),
+               "metadata must be stripped (Fireworks rejects extra fields)"
+
+        refute Map.has_key?(msg, "reasoning_details"),
+               "reasoning_details must be stripped (Fireworks rejects extra fields)"
+
+        refute Map.has_key?(msg, "reasoning_content"),
+               "reasoning_content must be stripped (Fireworks rejects extra fields)"
+      end
+    end
+
     test "encode_body forwards tools using OpenAI shape" do
       {:ok, model} =
         ReqLLM.model("fireworks_ai:accounts/fireworks/models/kimi-k2-instruct")
