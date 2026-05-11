@@ -823,6 +823,51 @@ defmodule ReqLLM.Providers.AzureTest do
       assert body[:reasoning_effort] == "high"
     end
 
+    test "Responses API models forward reasoning_effort to the encoded body" do
+      context = ReqLLM.Context.new([ReqLLM.Context.user("Complex reasoning task")])
+      opts = [stream: false, reasoning_effort: :high]
+
+      body = Azure.ResponsesAPI.format_request("gpt-5-codex", context, opts)
+
+      assert body["reasoning"] == %{"effort" => "high"}
+    end
+
+    test "Responses API models omit reasoning when reasoning_effort is absent" do
+      context = ReqLLM.Context.new([ReqLLM.Context.user("Hello")])
+      opts = [stream: false]
+
+      body = Azure.ResponsesAPI.format_request("gpt-5-codex", context, opts)
+
+      refute Map.has_key?(body, "reasoning")
+    end
+
+    test "Responses API models forward openai_parallel_tool_calls from provider_options" do
+      context = ReqLLM.Context.new([ReqLLM.Context.user("Hello")])
+      opts = [stream: false, provider_options: [openai_parallel_tool_calls: false]]
+
+      body = Azure.ResponsesAPI.format_request("gpt-5-codex", context, opts)
+
+      assert body["parallel_tool_calls"] == false
+    end
+
+    test "Responses API models accept parallel_tool_calls alias in provider_options" do
+      context = ReqLLM.Context.new([ReqLLM.Context.user("Hello")])
+      opts = [stream: false, provider_options: [parallel_tool_calls: true]]
+
+      body = Azure.ResponsesAPI.format_request("gpt-5-codex", context, opts)
+
+      assert body["parallel_tool_calls"] == true
+    end
+
+    test "Responses API models omit parallel_tool_calls when not provided" do
+      context = ReqLLM.Context.new([ReqLLM.Context.user("Hello")])
+      opts = [stream: false]
+
+      body = Azure.ResponsesAPI.format_request("gpt-5-codex", context, opts)
+
+      refute Map.has_key?(body, "parallel_tool_calls")
+    end
+
     test "Claude reasoning models override temperature to 1.0" do
       model = %LLMDB.Model{
         id: "claude-3-5-sonnet-20241022",
