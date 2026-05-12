@@ -401,6 +401,29 @@ defmodule ReqLLM.Provider.DefaultsTest do
     end
   end
 
+  describe "extra_option_keys/1" do
+    defmodule FakeProvider do
+      def supported_provider_options, do: []
+    end
+
+    test "registers :top_k so providers using default_attach don't crash on it" do
+      keys = Defaults.extra_option_keys(FakeProvider)
+
+      assert :top_k in keys,
+             ":top_k must be a registered Req option to avoid `unknown option` crashes; " <>
+               "provider build_body callbacks opt in to wire passthrough by reading " <>
+               "request.options[:top_k]"
+    end
+
+    test "registers other widely-supported sampling options alongside top_k" do
+      keys = Defaults.extra_option_keys(FakeProvider)
+
+      for k <- [:temperature, :top_p, :top_k, :seed, :stop, :frequency_penalty, :presence_penalty] do
+        assert k in keys, "expected #{inspect(k)} to be registered"
+      end
+    end
+  end
+
   describe "decode_response_body_openai_format/2" do
     setup do
       %{model: %LLMDB.Model{provider: :openai, id: "gpt-4"}}

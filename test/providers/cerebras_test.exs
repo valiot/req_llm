@@ -107,4 +107,12 @@ defmodule ReqLLM.Providers.CerebrasTest do
       assert decoded["parallel_tool_calls"] == false
     end
   end
+
+  describe "top_k registration" do
+    test "prepare_request accepts top-level top_k without crashing" do
+      {:ok, model} = ReqLLM.model("cerebras:gpt-oss-120b")
+
+      assert {:ok, %Req.Request{}} = Cerebras.prepare_request(:chat, model, "Hi", top_k: 40)
+    end
+  end
 end
