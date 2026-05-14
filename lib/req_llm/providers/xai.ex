@@ -39,6 +39,7 @@ defmodule ReqLLM.Providers.XAI do
   - `max_completion_tokens` - Preferred over max_tokens for Grok-4 models
   - `reasoning_effort` - Reasoning level (low, medium, high, none) for Grok-3 mini and Grok-4 family models
   - `xai_tools` - Agent tools configuration (e.g., web_search, x_search)
+  - `xai_api` - Force the API endpoint (:auto, :chat, :responses). Default :auto routes through the stateful Responses API only when built-in tools (web_search/x_search) are used. Set `:responses` to enable threaded reasoning across turns (`previous_response_id`) without built-in tools.
   - `parallel_tool_calls` - Allow parallel function calls (default: true)
   - `stream_options` - Streaming configuration (include_usage)
   - `xai_structured_output_mode` - Control structured output implementation (:auto, :json_schema, :tool_strict)
@@ -123,6 +124,20 @@ defmodule ReqLLM.Providers.XAI do
     xai_tools: [
       type: {:list, :map},
       doc: "Agent tools configuration (e.g., [%{type: \"web_search\"}])"
+    ],
+    xai_api: [
+      type: {:in, [:auto, :chat, :responses]},
+      default: :auto,
+      doc: """
+      Which xAI API endpoint to route through:
+      - `:auto` (default) — uses `/responses` when xai_tools include built-in
+        tools (web_search/x_search), otherwise `/chat/completions`.
+      - `:chat` — always uses `/chat/completions`.
+      - `:responses` — always uses `/responses`. Required when you want the
+        stateful, threaded conversation behavior (e.g. continuing a reasoning
+        loop across turns via `previous_response_id`) without enabling any
+        built-in tools.
+      """
     ],
     parallel_tool_calls: [
       type: :boolean,
@@ -342,12 +357,21 @@ defmodule ReqLLM.Providers.XAI do
   end
 
   defp use_responses_api?(opts) do
-    xai_tools = Keyword.get(opts, :xai_tools, [])
+    case Keyword.get(opts, :xai_api, :auto) do
+      :responses ->
+        true
 
-    Enum.any?(xai_tools, fn tool ->
-      tool_type = normalize_tool_type(Map.get(tool, :type))
-      tool_type in ["web_search", "x_search"]
-    end)
+      :chat ->
+        false
+
+      :auto ->
+        xai_tools = Keyword.get(opts, :xai_tools, [])
+
+        Enum.any?(xai_tools, fn tool ->
+          tool_type = normalize_tool_type(Map.get(tool, :type))
+          tool_type in ["web_search", "x_search"]
+        end)
+    end
   end
 
   defp ensure_min_tokens(model, opts) do
