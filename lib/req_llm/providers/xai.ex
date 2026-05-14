@@ -37,7 +37,7 @@ defmodule ReqLLM.Providers.XAI do
 
   Beyond standard OpenAI parameters, xAI supports:
   - `max_completion_tokens` - Preferred over max_tokens for Grok-4 models
-  - `reasoning_effort` - Reasoning level (low, medium, high) for Grok-3 mini models only
+  - `reasoning_effort` - Reasoning level (low, medium, high, none) for Grok-3 mini and Grok-4 family models
   - `xai_tools` - Agent tools configuration (e.g., web_search, x_search)
   - `parallel_tool_calls` - Allow parallel function calls (default: true)
   - `stream_options` - Streaming configuration (include_usage)
@@ -46,7 +46,7 @@ defmodule ReqLLM.Providers.XAI do
   ## Model Compatibility Notes
 
   - Native structured outputs supported on models >= `grok-2-1212` and `grok-2-vision-1212`
-  - `reasoning_effort` is only supported for grok-3-mini and grok-3-mini-fast models
+  - `reasoning_effort` is supported for grok-3-mini, grok-3-mini-fast, and Grok-4 family models (see https://docs.x.ai/developers/model-capabilities/text/reasoning)
   - Grok-4 models do not support `stop`, `presence_penalty`, or `frequency_penalty`
   - Agent tools (e.g., web_search) incur additional costs per source
 
@@ -713,7 +713,7 @@ defmodule ReqLLM.Providers.XAI do
     {opts, Enum.reverse(warnings)}
   end
 
-  def translate_options(_operation, model, opts) do
+  def translate_options(_operation, _model, opts) do
     warnings = []
 
     {stream_value, opts} = Keyword.pop(opts, :stream?)
@@ -775,18 +775,11 @@ defmodule ReqLLM.Providers.XAI do
 
     {reasoning_effort, opts} = Keyword.pop(opts, :reasoning_effort)
 
-    {opts, warnings} =
+    opts =
       if reasoning_effort do
-        model_name = model.id
-
-        if String.contains?(model_name, "grok-4") do
-          warning = "reasoning_effort is not supported for Grok-4 models and will be ignored"
-          {opts, [warning | warnings]}
-        else
-          {Keyword.put(opts, :reasoning_effort, reasoning_effort), warnings}
-        end
+        Keyword.put(opts, :reasoning_effort, reasoning_effort)
       else
-        {opts, warnings}
+        opts
       end
 
     {opts, Enum.reverse(warnings)}
