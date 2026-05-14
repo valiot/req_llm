@@ -357,7 +357,16 @@ defmodule ReqLLM.Providers.XAI do
   end
 
   defp use_responses_api?(opts) do
-    case Keyword.get(opts, :xai_api, :auto) do
+    # `xai_api` (and `xai_tools`) can sit either at the top level (when the
+    # caller passes them directly) or nested under `:provider_options` (which
+    # is how `ReqLLM.Provider.Options.process!/4` re-shapes provider-schema
+    # keys before they reach `attach_stream`). Look in both spots.
+    api =
+      Keyword.get(opts, :xai_api) ||
+        get_in(opts, [:provider_options, :xai_api]) ||
+        :auto
+
+    case api do
       :responses ->
         true
 
@@ -365,7 +374,10 @@ defmodule ReqLLM.Providers.XAI do
         false
 
       :auto ->
-        xai_tools = Keyword.get(opts, :xai_tools, [])
+        xai_tools =
+          Keyword.get(opts, :xai_tools) ||
+            get_in(opts, [:provider_options, :xai_tools]) ||
+            []
 
         Enum.any?(xai_tools, fn tool ->
           tool_type = normalize_tool_type(Map.get(tool, :type))
