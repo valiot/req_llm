@@ -88,6 +88,7 @@ Passed via `:provider_options` keyword:
 - Do NOT support `stop`, `presence_penalty`, or `frequency_penalty`
 - Use `max_completion_tokens` instead of `max_tokens`
 - Support native structured outputs
+- Support the `reasoning_effort` parameter (`"none"`, `"low"`, `"medium"`, `"high"`) — see [xAI's reasoning docs](https://docs.x.ai/developers/model-capabilities/text/reasoning)
 
 ### Grok-3-mini Models
 - Support `reasoning_effort` parameter (`"low"`, `"medium"`, `"high"`)
