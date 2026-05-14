@@ -630,12 +630,14 @@ defmodule ReqLLM.Providers.XAITest do
       assert Keyword.get(translated_opts, :reasoning_effort) == "high"
       assert warnings == []
 
+      # Grok-4 family now supports reasoning_effort
+      # (https://docs.x.ai/developers/model-capabilities/text/reasoning) — the
+      # parameter is forwarded to the API rather than dropped with a warning.
       {:ok, grok_4} = ReqLLM.model("xai:grok-4")
       {translated_opts, warnings} = XAI.translate_options(:chat, grok_4, opts)
 
-      refute Keyword.has_key?(translated_opts, :reasoning_effort)
-      assert length(warnings) == 1
-      assert hd(warnings) =~ "Grok-4"
+      assert Keyword.get(translated_opts, :reasoning_effort) == "high"
+      assert warnings == []
     end
   end
 
