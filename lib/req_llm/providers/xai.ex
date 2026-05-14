@@ -37,8 +37,9 @@ defmodule ReqLLM.Providers.XAI do
 
   Beyond standard OpenAI parameters, xAI supports:
   - `max_completion_tokens` - Preferred over max_tokens for Grok-4 models
-  - `reasoning_effort` - Reasoning level (low, medium, high) for Grok-3 mini models only
+  - `reasoning_effort` - Reasoning level (low, medium, high) for Grok-3 mini and Grok-4 family models
   - `xai_tools` - Agent tools configuration (e.g., web_search, x_search)
+  - `xai_api` - Force the API endpoint (:auto, :chat, :responses). Default :auto routes through the stateful Responses API only when built-in tools (web_search/x_search) are used. Set `:responses` to enable threaded reasoning across turns (`previous_response_id`) without built-in tools.
   - `parallel_tool_calls` - Allow parallel function calls (default: true)
   - `stream_options` - Streaming configuration (include_usage)
   - `xai_structured_output_mode` - Control structured output implementation (:auto, :json_schema, :tool_strict)
@@ -123,6 +124,20 @@ defmodule ReqLLM.Providers.XAI do
     xai_tools: [
       type: {:list, :map},
       doc: "Agent tools configuration (e.g., [%{type: \"web_search\"}])"
+    ],
+    xai_api: [
+      type: {:in, [:auto, :chat, :responses]},
+      default: :auto,
+      doc: """
+      Which xAI API endpoint to route through:
+      - `:auto` (default) — uses `/responses` when xai_tools include built-in
+        tools (web_search/x_search), otherwise `/chat/completions`.
+      - `:chat` — always uses `/chat/completions`.
+      - `:responses` — always uses `/responses`. Required when you want the
+        stateful, threaded conversation behavior (e.g. continuing a reasoning
+        loop across turns via `previous_response_id`) without enabling any
+        built-in tools.
+      """
     ],
     parallel_tool_calls: [
       type: :boolean,
@@ -341,13 +356,39 @@ defmodule ReqLLM.Providers.XAI do
     end
   end
 
+  # `xai_api` (and `xai_tools`) can sit either at the top level (when the
+  # caller passes them directly) or nested under `:provider_options` (which
+  # is how `ReqLLM.Provider.Options.process!/4` re-shapes provider-schema
+  # keys before they reach `attach_stream`). Read from both locations so
+  # the explicit `xai_api: :responses` toggle works on both the
+  # `prepare_request` and `attach_stream` paths.
   defp use_responses_api?(opts) do
-    xai_tools = Keyword.get(opts, :xai_tools, [])
+    case resolve_xai_api(opts) do
+      :responses ->
+        true
 
-    Enum.any?(xai_tools, fn tool ->
-      tool_type = normalize_tool_type(Map.get(tool, :type))
-      tool_type in ["web_search", "x_search"]
-    end)
+      :chat ->
+        false
+
+      :auto ->
+        opts |> resolve_xai_tools() |> Enum.any?(&built_in_tool?/1)
+    end
+  end
+
+  defp resolve_xai_api(opts) do
+    Keyword.get(opts, :xai_api) ||
+      get_in(opts, [:provider_options, :xai_api]) ||
+      :auto
+  end
+
+  defp resolve_xai_tools(opts) do
+    Keyword.get(opts, :xai_tools) ||
+      get_in(opts, [:provider_options, :xai_tools]) ||
+      []
+  end
+
+  defp built_in_tool?(tool) do
+    normalize_tool_type(Map.get(tool, :type)) in ["web_search", "x_search"]
   end
 
   defp ensure_min_tokens(model, opts) do

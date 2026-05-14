@@ -48,6 +48,15 @@ Passed via `:provider_options` keyword:
 - **Note**: `search_parameters` is deprecated and will be removed in a future release
 - **Note**: `live_search` is no longer supported by xAI and will be filtered out
 
+### `xai_api`
+- **Type**: `:auto` | `:chat` | `:responses`
+- **Default**: `:auto`
+- **Purpose**: Force the xAI API endpoint
+- **`:auto`** routes through `/responses` only when `xai_tools` includes built-in tools (`web_search` / `x_search`), otherwise `/chat/completions`
+- **`:chat`** always uses `/chat/completions`
+- **`:responses`** always uses `/responses` — required when you want the stateful Responses API (e.g. continuing a reasoning loop across turns via `previous_response_id`) without enabling any built-in tools
+- **Example**: `provider_options: [xai_api: :responses]`
+
 ### `parallel_tool_calls`
 
 - **Type**: Boolean

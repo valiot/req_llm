@@ -202,6 +202,47 @@ defmodule ReqLLM.Providers.XAITest do
     end
   end
 
+  describe "xai_api routing override" do
+    test "auto routes chat-only requests through /chat/completions" do
+      {:ok, req} =
+        XAI.prepare_request(:chat, "xai:grok-4.3", "hi", provider_options: [xai_api: :auto])
+
+      assert req.options[:xai_api_type] == :chat
+      assert req.url.path == "/chat/completions"
+    end
+
+    test "explicit :responses forces /responses without built-in tools" do
+      {:ok, req} =
+        XAI.prepare_request(:chat, "xai:grok-4.3", "hi", provider_options: [xai_api: :responses])
+
+      assert req.options[:xai_api_type] == :responses
+      assert req.url.path == "/responses"
+    end
+
+    test "explicit :chat overrides the built-in-tools auto upgrade" do
+      {:ok, req} =
+        XAI.prepare_request(:chat, "xai:grok-4.3", "hi",
+          provider_options: [
+            xai_api: :chat,
+            xai_tools: [%{type: "web_search"}]
+          ]
+        )
+
+      assert req.options[:xai_api_type] == :chat
+      assert req.url.path == "/chat/completions"
+    end
+
+    test "auto still upgrades when built-in tools are present" do
+      {:ok, req} =
+        XAI.prepare_request(:chat, "xai:grok-4.3", "hi",
+          provider_options: [xai_tools: [%{type: "web_search"}]]
+        )
+
+      assert req.options[:xai_api_type] == :responses
+      assert req.url.path == "/responses"
+    end
+  end
+
   describe "mode selection - response_format forcing" do
     test "forces :json_schema when response_format has json_schema" do
       {:ok, model} = ReqLLM.model("xai:grok-3")
