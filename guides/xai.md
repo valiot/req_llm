@@ -48,6 +48,15 @@ Passed via `:provider_options` keyword:
 - **Note**: `search_parameters` is deprecated and will be removed in a future release
 - **Note**: `live_search` is no longer supported by xAI and will be filtered out
 
+### `xai_api`
+- **Type**: `:auto` | `:chat` | `:responses`
+- **Default**: `:auto`
+- **Purpose**: Force the xAI API endpoint
+- **`:auto`** routes through `/responses` only when `xai_tools` includes built-in tools (`web_search` / `x_search`), otherwise `/chat/completions`
+- **`:chat`** always uses `/chat/completions`
+- **`:responses`** always uses `/responses` — required when you want the stateful Responses API (e.g. continuing a reasoning loop across turns via `previous_response_id`) without enabling any built-in tools
+- **Example**: `provider_options: [xai_api: :responses]`
+
 ### `parallel_tool_calls`
 
 - **Type**: Boolean
@@ -88,6 +97,7 @@ Passed via `:provider_options` keyword:
 - Do NOT support `stop`, `presence_penalty`, or `frequency_penalty`
 - Use `max_completion_tokens` instead of `max_tokens`
 - Support native structured outputs
+- Support the `reasoning_effort` parameter (`"none"`, `"low"`, `"medium"`, `"high"`) — see [xAI's reasoning docs](https://docs.x.ai/developers/model-capabilities/text/reasoning)
 
 ### Grok-3-mini Models
 - Support `reasoning_effort` parameter (`"low"`, `"medium"`, `"high"`)

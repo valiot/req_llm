@@ -202,6 +202,47 @@ defmodule ReqLLM.Providers.XAITest do
     end
   end
 
+  describe "xai_api routing override" do
+    test "auto routes chat-only requests through /chat/completions" do
+      {:ok, req} =
+        XAI.prepare_request(:chat, "xai:grok-4.3", "hi", provider_options: [xai_api: :auto])
+
+      assert req.options[:xai_api_type] == :chat
+      assert req.url.path == "/chat/completions"
+    end
+
+    test "explicit :responses forces /responses without built-in tools" do
+      {:ok, req} =
+        XAI.prepare_request(:chat, "xai:grok-4.3", "hi", provider_options: [xai_api: :responses])
+
+      assert req.options[:xai_api_type] == :responses
+      assert req.url.path == "/responses"
+    end
+
+    test "explicit :chat overrides the built-in-tools auto upgrade" do
+      {:ok, req} =
+        XAI.prepare_request(:chat, "xai:grok-4.3", "hi",
+          provider_options: [
+            xai_api: :chat,
+            xai_tools: [%{type: "web_search"}]
+          ]
+        )
+
+      assert req.options[:xai_api_type] == :chat
+      assert req.url.path == "/chat/completions"
+    end
+
+    test "auto still upgrades when built-in tools are present" do
+      {:ok, req} =
+        XAI.prepare_request(:chat, "xai:grok-4.3", "hi",
+          provider_options: [xai_tools: [%{type: "web_search"}]]
+        )
+
+      assert req.options[:xai_api_type] == :responses
+      assert req.url.path == "/responses"
+    end
+  end
+
   describe "mode selection - response_format forcing" do
     test "forces :json_schema when response_format has json_schema" do
       {:ok, model} = ReqLLM.model("xai:grok-3")
@@ -630,12 +671,14 @@ defmodule ReqLLM.Providers.XAITest do
       assert Keyword.get(translated_opts, :reasoning_effort) == "high"
       assert warnings == []
 
+      # Grok-4 family now supports reasoning_effort
+      # (https://docs.x.ai/developers/model-capabilities/text/reasoning) — the
+      # parameter is forwarded to the API rather than dropped with a warning.
       {:ok, grok_4} = ReqLLM.model("xai:grok-4")
       {translated_opts, warnings} = XAI.translate_options(:chat, grok_4, opts)
 
-      refute Keyword.has_key?(translated_opts, :reasoning_effort)
-      assert length(warnings) == 1
-      assert hd(warnings) =~ "Grok-4"
+      assert Keyword.get(translated_opts, :reasoning_effort) == "high"
+      assert warnings == []
     end
   end
 
